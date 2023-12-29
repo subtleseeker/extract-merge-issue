@@ -1,0 +1,15 @@
+domain: my.domain
+layout:
+- go.kubebuilder.io/v3
+projectName: myissue
+repo: my.domain/guestbook
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: my.domain
+  group: webapp
+  kind: Guestbook
+  path: my.domain/guestbook/api/v1
+  version: v1
+version: "3"
