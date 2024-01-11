@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/barkimedes/go-deepcopy"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -56,6 +57,9 @@ func TestIssue(t *testing.T) {
 
 	objManagedFields := object.GetManagedFields()
 	origObj, err := objectType.FromUnstructured(object.Object)
+	if err != nil {
+		panic(err)
+	}
 
 	for _, managedField := range objManagedFields {
 		if managedField.Manager == "kubectl-client-side-apply" {
@@ -71,6 +75,26 @@ func TestIssue(t *testing.T) {
 			panic(err)
 		}
 
+		logrus.Info("fieldSet.EnsureNamedFieldsAreMembers(): ", fieldset.EnsureNamedFieldsAreMembers(origObj.Schema(), origObj.TypeRef()).String())
+		logrus.Info("fieldset: ", fieldset.String())
+		logrus.Info("fieldSet.Leaves(): ", fieldset.Leaves().String())
+		logrus.Info("fieldSet.Size(): ", fieldset.Size())
+		fieldset.Iterate(func(p fieldpath.Path) {
+			for idx := range p {
+				if p[idx].Key != nil {
+					for jj := range *p[idx].Key {
+						pCopy := deepcopy.MustAnything(p).(fieldpath.Path)
+						pCopy[idx].FieldName = PointerTo((*p[idx].Key)[jj].Name)
+						*pCopy[idx].Key = nil
+						fieldset.Insert(pCopy)
+					}
+				}
+			}
+		})
+		logrus.Info("fieldset: ", fieldset.String())
+		//time="2024-01-10T10:53:44Z" level=info msg="fieldset: .spec.ports[port=80rotocol=\"TCP\"].nodePort"
+		//time="2024-01-10T10:53:44Z" level=info msg="fieldSet.Leaves(): .spec.ports[port=80rotocol=\"TCP\"].nodePort"
+
 		logrus.Info("original object before extracting fields", "origObject", origObj.AsValue())
 		extractedObj := origObj.ExtractItems(fieldset.Leaves())
 		// This is how the extractedObj looks like:
@@ -78,20 +102,21 @@ func TestIssue(t *testing.T) {
 		//extractedObj, err = objectType.FromUnstructured(jsonToInterface(`{"spec":{"ports":[{"nodePort":30001}]}}`))
 
 		// If the extracted object looks like this, there won't be any error.
-		// extractedObj, err = objectType.FromUnstructured(jsonToInterface(`{
-		//    "spec": {
-		//        "ports": [
-		//            {
-		//                "nodePort": 30001,
-		//                "port": 81,
-		//                "protocol": "TCP"
-		//            }
-		//        ]
-		//    }
-		//}`))
-		// if err != nil {
-		// 	panic(err)
-		// }
+		extractedObj, err = objectType.FromUnstructured(jsonToInterface(`{
+		    "spec": {
+		        "ports": [
+		            {
+		                "nodePort": 30001,
+		                "port": 81,
+		                "protocol": "TCP"
+		            }
+		        ]
+		    }
+		}`))
+		if err != nil {
+			panic(err)
+		}
+
 		logrus.Info("extracted items before merge", "extractedObj", JsonObjectToString(extractedObj.AsValue()))
 
 		// Simulation: This is the new object which is created after having
@@ -108,7 +133,7 @@ func TestIssue(t *testing.T) {
 		}
 		// This returns error:
 		// panic: failed to merge objects: .spec.ports: element 0: associative list with keys has an element that omits key field "port" (and doesn't have default value)
-		logrus.Infof("%v", JsonObjectToString(o))
+		logrus.Infof("%v", JsonObjectToString(o.AsValue().Unstructured()))
 	}
 }
 
@@ -249,4 +274,8 @@ func JsonObjectToString(j interface{}) string {
 		panic(err)
 	}
 	return string(b)
+}
+
+func PointerTo[V any](v V) *V {
+	return &v
 }

@@ -18,7 +18,10 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-require k8s.io/kubectl v0.26.9
+require (
+	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df
+	k8s.io/kubectl v0.26.9
+)
 
 require (
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
